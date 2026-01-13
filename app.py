@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # =========================
-# CSS (VISUAL MAIS BONITO)
+# CSS (VISUAL PREMIUM)
 # =========================
 st.markdown(
     """
@@ -40,7 +40,7 @@ st.markdown(
   margin: 4px 6px 0 0;
   border-radius: 999px;
   border: 1px solid rgba(0,0,0,.10);
-  background: rgba(255,255,255,.9);
+  background: rgba(255,255,255,.90);
   font-size: 13px;
 }
 
@@ -95,31 +95,74 @@ st.markdown("</div>", unsafe_allow_html=True)
 st.write("")
 
 # =========================
-# ATALHOS (BOTÕES RÁPIDOS)
+# FILTROS RÁPIDOS (CLIQUE PARA APLICAR)
 # =========================
 if "quick_produto" not in st.session_state:
-    st.session_state.quick_produto = None
+    st.session_state.quick_produto = None  # SAÚDE | ODONTO | AMBOS | None
 if "quick_hist" not in st.session_state:
     st.session_state.quick_hist = False
 
-st.markdown('<div class="joy-muted-2">Atalhos rápidos (opcional):</div>', unsafe_allow_html=True)
-b1, b2, b3, b4, b5 = st.columns([1.3, 1.1, 1, 1, 1])
+st.markdown("### 🎛️ Filtros rápidos")
+st.markdown(
+    '<div class="joy-muted-2">Clique para aplicar. Você pode combinar com o que digitar (ID/empresa + filtro).</div>',
+    unsafe_allow_html=True
+)
 
-with b1:
-    if st.button("📌 Última atualização", use_container_width=True):
+a1, a2, a3 = st.columns([1.2, 1.8, 3.0])
+
+with a1:
+    if st.button("🧽 Limpar filtros", use_container_width=True):
+        st.session_state.quick_produto = None
         st.session_state.quick_hist = False
-with b2:
-    if st.button("🗂️ Histórico", use_container_width=True):
-        st.session_state.quick_hist = True
-with b3:
-    if st.button("🩺 Saúde", use_container_width=True):
-        st.session_state.quick_produto = "SAÚDE"
-with b4:
-    if st.button("🦷 Odonto", use_container_width=True):
-        st.session_state.quick_produto = "ODONTO"
-with b5:
-    if st.button("🩺+🦷 Ambos", use_container_width=True):
-        st.session_state.quick_produto = "AMBOS"
+
+with a2:
+    label = "✅ Modo: Histórico" if st.session_state.quick_hist else "🗂️ Modo: Última atualização"
+    if st.button(label, use_container_width=True):
+        st.session_state.quick_hist = not st.session_state.quick_hist
+
+with a3:
+    st.write("")
+
+p1, p2, p3, p4 = st.columns([1, 1, 1, 1])
+
+def chip(label: str, value: str):
+    active = (st.session_state.quick_produto == value)
+    text = f"✅ {label}" if active else label
+    if st.button(text, use_container_width=True):
+        st.session_state.quick_produto = value
+
+with p1:
+    chip("🩺 Saúde", "SAÚDE")
+with p2:
+    chip("🦷 Odonto", "ODONTO")
+with p3:
+    chip("🩺+🦷 Ambos", "AMBOS")
+with p4:
+    if st.button("🚫 Sem produto", use_container_width=True):
+        st.session_state.quick_produto = None
+
+prod_txt = st.session_state.quick_produto if st.session_state.quick_produto else "—"
+modo_txt = "Histórico" if st.session_state.quick_hist else "Última atualização"
+
+st.markdown(
+    f"""
+<div class="joy-card-ans" style="margin-top:10px;">
+<b>Filtros ativos</b><br>
+<span class="joy-chip">Produto: {prod_txt}</span>
+<span class="joy-chip">Modo: {modo_txt}</span>
+</div>
+""",
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+<div class="joy-muted-2" style="margin-top:8px;">
+Dica: digite <b>6163</b> ou <b>Leadace</b> e use os filtros acima para refinar 😉
+</div>
+""",
+    unsafe_allow_html=True
+)
 
 st.write("")
 
@@ -199,6 +242,7 @@ def filter_df(df: pd.DataFrame, demanda_id=None, empresa_term=None, produto=None
         term = empresa_term.lower()
         out = out[out[COL_EMPRESA].str.lower().str.contains(term, na=False)]
 
+    # "AMBOS" significa não filtrar por produto (pega tudo)
     if produto and produto != "AMBOS":
         out = out[out[COL_PRODUTO].str.lower().str.contains(produto.lower(), na=False)]
 
@@ -256,16 +300,14 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-placeholder_hint = []
+hint_parts = []
 if st.session_state.quick_produto:
-    placeholder_hint.append(st.session_state.quick_produto.lower())
-if st.session_state.quick_hist:
-    placeholder_hint.append("histórico")
-hint = (" | ".join(placeholder_hint)).strip()
-hint_txt = f" (atalhos: {hint})" if hint else ""
+    hint_parts.append(f"produto={st.session_state.quick_produto.lower()}")
+hint_parts.append("modo=histórico" if st.session_state.quick_hist else "modo=última")
+hint_txt = " | ".join(hint_parts)
 
 user_msg = st.chat_input(
-    f"Digite um ID (ex: 6163) ou a empresa. Ex: '6163 histórico' | 'Leadec saúde desde 10/01/2026'{hint_txt}"
+    f"Digite um ID (ex: 6163) ou empresa — filtros ativos: {hint_txt}. Ex: '6163' | 'Leadace desde 10/01/2026'"
 )
 
 if user_msg:
@@ -275,9 +317,11 @@ if user_msg:
 
     demanda_id, empresa_term, produto, historico, date_exact, date_since = parse_user_message(user_msg)
 
-    # Aplica atalhos se o usuário não informou explicitamente
+    # Aplica filtros rápidos se o usuário não informou explicitamente
     if not produto and st.session_state.quick_produto:
         produto = st.session_state.quick_produto
+
+    # Se o usuário não pediu histórico explicitamente, usa o modo selecionado
     if not historico and st.session_state.quick_hist:
         historico = True
 
