@@ -1,6 +1,4 @@
 import re
-import base64
-from pathlib import Path
 import pandas as pd
 import streamlit as st
 
@@ -13,8 +11,8 @@ st.set_page_config(
     layout="centered",
 )
 
-VIDEO_TOP = "joy_idle.mp4"         # topo (sempre)
-VIDEO_RESULT = "joy_success.mp4"   # só quando tem resultado
+VIDEO_TOP = "joy_idle.mp4"
+VIDEO_RESULT = "joy_success.mp4"
 
 SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7eJXK_IARZPmt6GdsQLDPX4sSI-aCWZK286Y4DtwhVXr3NOH22eTIPwkFSbF14rfdYReQndgU51st/pub?gid=0&single=true&output=csv"
 
@@ -28,172 +26,193 @@ COL_STATUS = "STATUS"
 COL_TEXTO = "TEXTO"
 
 # =========================
-# CSS (Premium de verdade)
+# STATE
+# =========================
+if "query" not in st.session_state:
+    st.session_state.query = ""
+if "quick_produto" not in st.session_state:
+    st.session_state.quick_produto = None
+if "quick_hist" not in st.session_state:
+    st.session_state.quick_hist = False
+
+# =========================
+# CSS PREMIUM
 # =========================
 st.markdown(
     """
 <style>
-.block-container{max-width:980px;padding-top:1.1rem;padding-bottom:2.0rem}
+.block-container{
+  max-width: 1040px;
+  padding-top: 1.1rem;
+  padding-bottom: 2.2rem;
+}
 
-/* HERO */
+/* ====== HERO ====== */
 .joy-hero{
-  border:1px solid rgba(0,0,0,.07);
-  border-radius:20px;
-  padding:16px 16px;
-  background:linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.90));
-  box-shadow:0 14px 34px rgba(0,0,0,.06);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 22px;
+  padding: 18px 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(255,255,255,.90));
+  box-shadow: 0 18px 44px rgba(0,0,0,.07);
+  margin-bottom: 14px;
 }
-.joy-hero-row{display:flex;gap:14px;align-items:center}
-.joy-avatar{
-  width:64px;height:64px;border-radius:18px;
-  overflow:hidden;
-  border:1px solid rgba(0,0,0,.08);
-  box-shadow:0 10px 18px rgba(0,0,0,.06);
-  background:#fff; flex:0 0 auto;
+
+.joy-title{
+  font-size: 28px;
+  font-weight: 860;
+  line-height: 1.1;
+  margin: 0;
 }
-.joy-avatar video{width:64px;height:64px;object-fit:cover;display:block}
 
-.joy-title{margin:0;font-size:24px;font-weight:800;line-height:1.12}
-.joy-sub{margin-top:4px;color:rgba(0,0,0,.62);font-size:13px}
-.joy-help{margin-top:10px;color:rgba(0,0,0,.86);font-size:14px;line-height:1.45}
-.joy-help b{font-weight:780}
+.joy-sub{
+  margin-top: 6px;
+  color: rgba(0,0,0,.62);
+  font-size: 13.5px;
+}
 
-/* SEARCH */
-.joy-search{margin-top:14px}
-.joy-label{font-size:13px;color:rgba(0,0,0,.62);margin-bottom:6px}
+.joy-help{
+  margin-top: 12px;
+  color: rgba(0,0,0,.86);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.joy-help b{ font-weight: 820; }
+
+.joy-divider{
+  margin: 14px 0 8px 0;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+/* ====== SEARCH ====== */
+.joy-search-label{
+  font-size: 13px;
+  color: rgba(0,0,0,.62);
+  margin-bottom: 6px;
+}
+
 div[data-testid="stTextInput"] input{
-  border-radius:14px !important;
-  border:1px solid rgba(0,0,0,.10) !important;
-  padding:12px 14px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  padding: 12px 14px !important;
+  font-size: 14px !important;
 }
+
 div[data-testid="stTextInput"] input:focus{
-  border:1px solid rgba(0,0,0,.20) !important;
-  box-shadow:0 0 0 4px rgba(0,0,0,.06) !important;
-}
-.joy-btn > button{
-  border-radius:14px !important;
-  padding:10px 14px !important;
-  border:1px solid rgba(0,0,0,.10) !important;
-  font-weight:650 !important;
+  border: 1px solid rgba(0,0,0,.22) !important;
+  box-shadow: 0 0 0 4px rgba(0,0,0,.06) !important;
 }
 
-/* PILLS */
-.joy-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.joy-pill > button{
-  border-radius:999px !important;
-  padding:6px 10px !important;
-  border:1px solid rgba(0,0,0,.10) !important;
-  font-size:12.5px !important;
+.joy-primary > button{
+  border-radius: 16px !important;
+  padding: 10px 14px !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  font-weight: 760 !important;
 }
 
-/* FILTERS */
-.joy-section{margin-top:14px}
-.joy-section-title{font-weight:780;margin:0 0 6px 0;font-size:14px}
-.joy-muted{color:rgba(0,0,0,.58);font-size:12.8px}
-
-.joy-filters{
-  border:1px solid rgba(0,0,0,.07);
-  border-radius:18px;
-  padding:12px 12px;
-  background:rgba(255,255,255,.70);
-}
-.joy-chip{
-  display:inline-block;
-  padding:6px 10px;
-  margin:6px 8px 0 0;
-  border-radius:999px;
-  border:1px solid rgba(0,0,0,.10);
-  background:rgba(255,255,255,.95);
-  font-size:12px;
+/* ====== CHIPS ====== */
+.joy-chiprow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-/* RESULT CARD */
+.joy-chipbtn > button{
+  border-radius: 999px !important;
+  padding: 6px 10px !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  font-size: 12.8px !important;
+}
+
+/* ====== FILTER CARD ====== */
 .joy-card{
-  margin-top:14px;
-  border:1px solid rgba(0,0,0,.07);
-  border-radius:18px;
-  padding:14px 14px;
-  background:rgba(255,255,255,.92);
-  box-shadow:0 10px 22px rgba(0,0,0,.05);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  padding: 14px 14px;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 14px 34px rgba(0,0,0,.05);
+  margin-top: 12px;
 }
-.joy-card-head{
-  display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+
+.joy-card-title{
+  font-weight: 850;
+  font-size: 14px;
+  margin: 0;
 }
-.joy-card-title{font-weight:820;font-size:14px;margin:0}
+
+.joy-muted{
+  color: rgba(0,0,0,.58);
+  font-size: 12.8px;
+  margin-top: 4px;
+}
+
+.joy-pilltag{
+  display:inline-block;
+  padding: 6px 10px;
+  margin: 8px 8px 0 0;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.03);
+  font-size: 12px;
+}
+
+/* ====== RESULT HEADER ====== */
+.joy-head{
+  display:flex;
+  justify-content: space-between;
+  align-items:flex-start;
+  gap: 14px;
+}
+
 .joy-badge{
   display:inline-block;
-  padding:5px 10px;
-  border-radius:999px;
-  border:1px solid rgba(0,0,0,.10);
-  background:rgba(0,0,0,.03);
-  font-size:12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(0,0,0,.03);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.joy-hr{margin:12px 0;border-bottom:1px solid rgba(0,0,0,.07)}
-
+/* ====== RESULT GRID ====== */
 .joy-grid{
   display:grid;
-  grid-template-columns:120px 1fr;
-  gap:6px 10px;
-  font-size:13.8px;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 10px;
+  font-size: 13.6px;
+  margin-top: 10px;
 }
-.joy-grid b{color:rgba(0,0,0,.78)}
-.joy-grid span{color:rgba(0,0,0,.90)}
+.joy-grid b{ color: rgba(0,0,0,.78); }
+.joy-grid span{ color: rgba(0,0,0,.92); }
 
-.joy-result-video{
-  width:92px;height:92px;border-radius:18px;overflow:hidden;
-  border:1px solid rgba(0,0,0,.08);
-  box-shadow:0 10px 18px rgba(0,0,0,.06);
-  flex:0 0 auto;
+.joy-hr{
+  margin: 12px 0;
+  border-bottom: 1px solid rgba(0,0,0,.08);
 }
-.joy-result-video video{width:92px;height:92px;object-fit:cover;display:block}
 
+/* ====== TABLE LOOK ====== */
+[data-testid="stDataFrame"]{
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.08);
+}
+
+/* ====== VIDEO LOOK ====== */
+.joy-video-wrap{
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,.10);
+  box-shadow: 0 14px 30px rgba(0,0,0,.08);
+  background: #fff;
+}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
 # =========================
-# VIDEO base64
-# =========================
-@st.cache_data(show_spinner=False)
-def video_to_data_url(path: str) -> str:
-    data = Path(path).read_bytes()
-    b64 = base64.b64encode(data).decode("utf-8")
-    return f"data:video/mp4;base64,{b64}"
-
-def render_avatar_video(path: str):
-    try:
-        url = video_to_data_url(path)
-    except Exception:
-        st.markdown("<div class='joy-avatar'></div>", unsafe_allow_html=True)
-        return
-    st.markdown(
-        f"""
-<div class="joy-avatar">
-  <video autoplay muted loop playsinline preload="auto">
-    <source src="{url}" type="video/mp4">
-  </video>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-def render_result_video(path: str):
-    try:
-        url = video_to_data_url(path)
-    except Exception:
-        return ""
-    return f"""
-<div class="joy-result-video">
-  <video autoplay muted loop playsinline preload="auto">
-    <source src="{url}" type="video/mp4">
-  </video>
-</div>
-"""
-
-# =========================
-# DATA
+# DATA LOAD
 # =========================
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(url: str) -> pd.DataFrame:
@@ -209,17 +228,7 @@ def load_data(url: str) -> pd.DataFrame:
 df = load_data(SHEETS_CSV_URL)
 
 # =========================
-# STATE
-# =========================
-if "query" not in st.session_state:
-    st.session_state.query = ""
-if "quick_produto" not in st.session_state:
-    st.session_state.quick_produto = None
-if "quick_hist" not in st.session_state:
-    st.session_state.quick_hist = False
-
-# =========================
-# PARSE
+# PARSE & FILTER
 # =========================
 def parse_user_message(msg: str):
     m = msg.strip()
@@ -282,66 +291,69 @@ def badge_text(status: str) -> str:
     return status.title() if status else "—"
 
 # =========================
-# HERO
+# HERO (2 colunas, vídeo grande e bonito)
 # =========================
 st.markdown("<div class='joy-hero'>", unsafe_allow_html=True)
-st.markdown("<div class='joy-hero-row'>", unsafe_allow_html=True)
-render_avatar_video(VIDEO_TOP)
+c_vid, c_txt = st.columns([1.15, 1.85], vertical_alignment="center")
 
-st.markdown(
-    """
-<div>
-  <div class="joy-title">J.O.Y – Assistente Placement Jr</div>
-  <div class="joy-sub">Status, histórico e andamento dos estudos — sem depender de mensagens no Teams.</div>
-  <div class="joy-help">
-    <b>Pesquise</b> por <b>ID</b> ou <b>empresa</b>.  
-    Para refinar: <b>saúde</b>/<b>odonto</b>, <b>histórico</b>, <b>desde dd/mm/aaaa</b>.
-  </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
-st.markdown("</div>", unsafe_allow_html=True)
-
-# Search
-st.markdown("<div class='joy-search'>", unsafe_allow_html=True)
-st.markdown("<div class='joy-label'>🔎 O que vamos consultar agora?</div>", unsafe_allow_html=True)
-
-c_in, c_btn = st.columns([5.3, 1.3])
-with c_in:
-    st.session_state.query = st.text_input(
-        label="",
-        value=st.session_state.query,
-        placeholder="Ex.: 6163 | Leadec | Leadec saúde | 6163 histórico | desde 10/01/2026",
-    )
-with c_btn:
-    st.markdown("<div class='joy-btn'>", unsafe_allow_html=True)
-    do_search = st.button("Buscar", use_container_width=True)
+with c_vid:
+    st.markdown("<div class='joy-video-wrap'>", unsafe_allow_html=True)
+    st.video(VIDEO_TOP, loop=True, autoplay=True, muted=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Sugestões
-st.markdown("<div class='joy-pills'>", unsafe_allow_html=True)
-pill_cols = st.columns(6)
-sugs = ["6163", "6163 histórico", "Leadec", "Leadec saúde", "Leadec odonto", "desde 10/01/2026"]
-for i, s in enumerate(sugs):
-    with pill_cols[i]:
-        st.markdown("<div class='joy-pill'>", unsafe_allow_html=True)
-        if st.button(s, use_container_width=True):
-            st.session_state.query = s
-            do_search = True
+with c_txt:
+    st.markdown("<p class='joy-title'>J.O.Y – Assistente Placement Jr</p>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='joy-sub'>Status, histórico e andamento dos estudos — sem depender de mensagens no Teams.</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='joy-help'><b>Digite</b> o <b>ID</b> ou a <b>empresa</b>. "
+        "Pra refinar, use <b>saúde</b>/<b>odonto</b>, <b>histórico</b> e <b>desde dd/mm/aaaa</b>.</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='joy-divider'></div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='joy-search-label'>🔎 Onde você quer que eu olhe agora?</div>", unsafe_allow_html=True)
+    cin, cbtn = st.columns([4.2, 1.2])
+    with cin:
+        st.session_state.query = st.text_input(
+            label="",
+            value=st.session_state.query,
+            placeholder="Ex.: 6163 | Leadec | 6163 histórico | Leadec saúde | desde 10/01/2026",
+        )
+    with cbtn:
+        st.markdown("<div class='joy-primary'>", unsafe_allow_html=True)
+        do_search = st.button("Buscar", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+
+    # chips
+    st.markdown("<div class='joy-chiprow'>", unsafe_allow_html=True)
+    chip_cols = st.columns(6)
+    sugs = ["6163", "6163 histórico", "Leadec", "Leadec saúde", "Leadec odonto", "desde 10/01/2026"]
+    for i, s in enumerate(sugs):
+        with chip_cols[i]:
+            st.markdown("<div class='joy-chipbtn'>", unsafe_allow_html=True)
+            if st.button(s, use_container_width=True):
+                st.session_state.query = s
+                do_search = True
+            st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("</div>", unsafe_allow_html=True)  # fecha hero
 
 # =========================
-# FILTROS
+# FILTROS (card separado)
 # =========================
-st.markdown("<div class='joy-section'>", unsafe_allow_html=True)
-st.markdown("<div class='joy-section-title'>🎛️ Refine</div>", unsafe_allow_html=True)
-st.markdown("<div class='joy-muted'>Use os botões e depois clique em <b>Buscar</b>.</div>", unsafe_allow_html=True)
+st.markdown("<div class='joy-card'>", unsafe_allow_html=True)
+st.markdown("<div class='joy-head'>"
+            "<div>"
+            "<div class='joy-card-title'>🎛️ Refine sua consulta</div>"
+            "<div class='joy-muted'>Clique nos filtros e depois em <b>Buscar</b>.</div>"
+            "</div>"
+            "</div>", unsafe_allow_html=True)
 
-st.markdown("<div class='joy-filters'>", unsafe_allow_html=True)
 b1, b2, b3, b4, b5 = st.columns(5)
 with b1:
     if st.button("🧽 Limpar", use_container_width=True):
@@ -365,23 +377,18 @@ prod_txt = st.session_state.quick_produto if st.session_state.quick_produto else
 modo_txt = "Histórico" if st.session_state.quick_hist else "Última atualização"
 st.markdown(
     f"""
-<div class="joy-muted" style="margin-top:8px;">
-<b>Ativo:</b>
-<span class="joy-chip">Produto: {prod_txt}</span>
-<span class="joy-chip">Modo: {modo_txt}</span>
-</div>
+<span class="joy-pilltag">Produto: {prod_txt}</span>
+<span class="joy-pilltag">Modo: {modo_txt}</span>
 """,
     unsafe_allow_html=True,
 )
 st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================
-# RESULTADO (SÓ 1 CARD)
+# RESULTADO (card premium + vídeo grande só aqui)
 # =========================
 if do_search and st.session_state.query.strip():
     q = st.session_state.query.strip()
-
     demanda_id, empresa_term, produto, historico, date_since = parse_user_message(q)
 
     # aplica filtros rápidos se não veio no texto
@@ -394,66 +401,45 @@ if do_search and st.session_state.query.strip():
 
     if result.empty:
         st.markdown("<div class='joy-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='joy-card-title'>😅 Nada encontrado</div>", unsafe_allow_html=True)
-        st.markdown("<div class='joy-hr'></div>", unsafe_allow_html=True)
-        st.markdown(
-            "Tenta assim:\n"
-            "- só o **ID** (ex: **6163**)\n"
-            "- ou só a empresa (ex: **Leadec**)\n"
-            "- ou adiciona **saúde/odonto**"
-        )
+        st.markdown("<div class='joy-card-title'>😅 Não encontrei nada</div>", unsafe_allow_html=True)
+        st.markdown("<div class='joy-muted'>Dicas: tente só o <b>ID</b> (ex: 6163) ou só a empresa (ex: Leadec).</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     else:
-        # Cabeçalho + vídeo integrado NO card
-        vid_html = render_result_video(VIDEO_RESULT)
+        # Layout do resultado: texto + vídeo grande no lado
+        st.markdown("<div class='joy-card'>", unsafe_allow_html=True)
+        r1, r2 = st.columns([2.2, 1], vertical_alignment="top")
 
-        if historico:
-            view = result[[COL_DATE, COL_STATUS, COL_PRODUTO, COL_AUTOR, COL_TEXTO]].copy()
-            view[COL_DATE] = view[COL_DATE].dt.strftime("%d/%m/%Y")
-            view = view.rename(
-                columns={
+        with r1:
+            if historico:
+                st.markdown("<div class='joy-card-title'>🗂️ Histórico</div>", unsafe_allow_html=True)
+                st.markdown("<div class='joy-muted'>Mais recente primeiro — consulta: <b>" + q + "</b></div>", unsafe_allow_html=True)
+                st.markdown("<div class='joy-hr'></div>", unsafe_allow_html=True)
+
+                view = result[[COL_DATE, COL_STATUS, COL_PRODUTO, COL_AUTOR, COL_TEXTO]].copy()
+                view[COL_DATE] = view[COL_DATE].dt.strftime("%d/%m/%Y")
+                view = view.rename(columns={
                     COL_DATE: "Data",
                     COL_STATUS: "Status",
                     COL_PRODUTO: "Produto",
                     COL_AUTOR: "Autor",
                     COL_TEXTO: "Atualização",
-                }
-            )
+                })
+                st.dataframe(view, use_container_width=True, hide_index=True)
+            else:
+                r = result.iloc[0]
+                d = r[COL_DATE].strftime("%d/%m/%Y") if pd.notna(r[COL_DATE]) else "—"
+                badge = badge_text(r[COL_STATUS])
 
-            st.markdown("<div class='joy-card'>", unsafe_allow_html=True)
-            st.markdown(
-                f"""
-<div class="joy-card-head">
-  <div>
-    <div class="joy-card-title">🗂️ Histórico</div>
-    <div class="joy-muted">Mais recente primeiro</div>
-  </div>
-  {vid_html}
-</div>
-<div class="joy-hr"></div>
-""",
-                unsafe_allow_html=True,
-            )
-            st.dataframe(view, use_container_width=True, hide_index=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='joy-card-title'>📌 Última atualização <span class='joy-badge'>{badge}</span></div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown("<div class='joy-muted'>Consulta: <b>" + q + "</b></div>", unsafe_allow_html=True)
+                st.markdown("<div class='joy-hr'></div>", unsafe_allow_html=True)
 
-        else:
-            r = result.iloc[0]
-            d = r[COL_DATE].strftime("%d/%m/%Y") if pd.notna(r[COL_DATE]) else "—"
-            badge = badge_text(r[COL_STATUS])
-
-            st.markdown("<div class='joy-card'>", unsafe_allow_html=True)
-            st.markdown(
-                f"""
-<div class="joy-card-head">
-  <div>
-    <div class="joy-card-title">📌 Última atualização <span class="joy-badge">{badge}</span></div>
-    <div class="joy-muted">Consulta: <b>{q}</b></div>
-  </div>
-  {vid_html}
-</div>
-<div class="joy-hr"></div>
+                st.markdown(
+                    f"""
 <div class="joy-grid">
   <b>ID</b><span>{r[COL_ID]}</span>
   <b>Empresa</b><span>{r[COL_EMPRESA]}</span>
@@ -467,6 +453,13 @@ if do_search and st.session_state.query.strip():
 <b>Resumo</b><br>
 <span>{r[COL_TEXTO]}</span>
 """,
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
+
+        with r2:
+            st.markdown("<div class='joy-muted' style='margin-bottom:6px;'>J.O.Y. confirmando a entrega ✅</div>", unsafe_allow_html=True)
+            st.markdown("<div class='joy-video-wrap'>", unsafe_allow_html=True)
+            st.video(VIDEO_RESULT, loop=True, autoplay=True, muted=True)
             st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
