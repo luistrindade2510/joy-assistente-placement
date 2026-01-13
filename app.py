@@ -8,7 +8,7 @@ import streamlit as st
 col1, col2 = st.columns([1, 3])
 
 with col1:
-    st.image("joy.png", use_container_width=True)
+    st.image("https://i.imgur.com/placeholder.png", use_container_width=True)
 
 with col2:
     st.markdown("## 💬 JOY – Assistente do time de Placement")
