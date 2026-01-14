@@ -386,7 +386,7 @@ with c1:
     loop_video_html(VIDEO_IDLE, width_px=165)
 
 with c2:
-    st.markdown(f'<div class="joy-title">💬 {ASSISTANT_NAME} – Estagiária Placement Jr</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="joy-title">💬 {ASSISTANT_NAME} – Estagiária Placement</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="joy-sub">Status, histórico e andamento dos estudos — sem depender de mensagens no Teams.</div>',
         unsafe_allow_html=True,
