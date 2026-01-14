@@ -1,6 +1,7 @@
 import re
 import base64
 from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
@@ -28,7 +29,7 @@ COL_STATUS = "STATUS"
 COL_TEXTO = "TEXTO"
 
 # =========================================================
-# CSS (premium + vídeo SEM quadro + export discreto)
+# CSS (premium + toolbar ícones)
 # =========================================================
 st.markdown(
     """
@@ -39,7 +40,7 @@ st.markdown(
   max-width: 1040px;
 }
 
-/* HERO card */
+/* Card topo */
 .joy-card{
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 18px;
@@ -67,7 +68,7 @@ st.markdown(
 }
 .joy-lead b{ font-weight: 900; }
 
-/* ---------- VÍDEO SEM “QUADRO” ---------- */
+/* Vídeo SEM player/sem quadro */
 .joy-video-wrap{
   width: 165px;
   max-width: 165px;
@@ -80,14 +81,14 @@ st.markdown(
 .joy-video{
   width: 165px;
   height: auto;
-  border-radius: 0px !important;     /* tira cara de card */
+  border-radius: 0px !important;
   display:block;
-  background: transparent !important; /* evita “placa” */
+  background: transparent !important;
   box-shadow: none !important;
   outline: none !important;
 }
 
-/* ---------- SEARCH ---------- */
+/* Search box */
 .joy-search-wrap{
   margin-top: 12px;
   padding: 12px;
@@ -116,7 +117,7 @@ div[data-baseweb="input"] input{
   transform: translateY(-1px);
 }
 
-/* ---------- REFINE ---------- */
+/* Refine */
 .joy-refine{
   margin-top: 14px;
   border: 1px solid rgba(0,0,0,.08);
@@ -146,19 +147,21 @@ div[data-baseweb="input"] input{
   margin-right: 6px;
 }
 
-/* ---------- RESULT HEADER + TOOLBAR EXPORT (discreto) ---------- */
-.joy-result-head{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap: 18px;
-  margin: 12px 0 6px 0;
+/* Result header + toolbar */
+.joy-result-card{
+  margin-top: 14px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  padding: 14px 14px 12px 14px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 14px 35px rgba(0,0,0,.06);
 }
+
 .joy-result-title{
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 950;
   margin: 0;
-  letter-spacing: -0.4px;
+  letter-spacing: -0.35px;
 }
 .joy-result-sub{
   color: rgba(0,0,0,.55);
@@ -166,32 +169,37 @@ div[data-baseweb="input"] input{
   margin-top: 6px;
 }
 
-/* toolbar estilo “link acima do resultado” */
+/* Toolbar (ícones) igual print */
 .joy-toolbar{
   display:flex;
-  align-items:center;
   justify-content:flex-end;
-  gap: 10px;
-  margin: 2px 0 10px 0;
+  align-items:center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.92);
+  border-radius: 12px;
+  width: fit-content;
+  margin-left: auto;
 }
-.joy-toolbar small{
-  color: rgba(0,0,0,.55);
+.joy-icon{
+  display:inline-flex;
+  width: 34px;
+  height: 30px;
+  align-items:center;
+  justify-content:center;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.02);
+  text-decoration:none;
+  color: rgba(0,0,0,.70);
+  font-size: 15px;
+  line-height: 1;
 }
-
-/* deixa download_button com cara de link discreto */
-.joy-toolbar div[data-testid="stDownloadButton"] button{
-  height: 34px !important;
-  padding: 0 10px !important;
-  border-radius: 10px !important;
-  font-weight: 800 !important;
-}
-.joy-toolbar div[data-testid="stDownloadButton"] button{
-  background: rgba(0,0,0,.02) !important;
-  border: 1px solid rgba(0,0,0,.12) !important;
-}
-.joy-toolbar div[data-testid="stDownloadButton"] button:hover{
-  background: rgba(0,0,0,.04) !important;
-  border-color: rgba(0,0,0,.20) !important;
+.joy-icon:hover{
+  background: rgba(0,0,0,.05);
+  border-color: rgba(0,0,0,.18);
+  color: rgba(0,0,0,.88);
 }
 
 /* tabela */
@@ -233,12 +241,11 @@ def video_to_data_url(path: str) -> str:
     return f"data:video/mp4;base64,{b64}"
 
 def loop_video_html(path: str, width_px: int = 165):
+    """Vídeo em loop/autoplay/muted, sem controles (não vira 'player')"""
     try:
         url = video_to_data_url(path)
     except Exception:
         return
-
-    # controls removidos, background transparente, sem “card”
     st.markdown(
         f"""
 <div class="joy-video-wrap">
@@ -318,13 +325,20 @@ def filter_df(df: pd.DataFrame, demanda_id=None, empresa_term=None, produto=None
         out = out[out[COL_DATE] >= date_since]
     return out.sort_values(by=COL_DATE, ascending=False)
 
-def build_csv_bytes(df_export: pd.DataFrame) -> bytes:
+def to_csv_bytes(df_export: pd.DataFrame) -> bytes:
     return df_export.to_csv(index=False).encode("utf-8")
+
+def download_icon_link(data_bytes: bytes, filename: str, icon: str, tooltip: str):
+    """Link HTML com ícone (estilo toolbar do print)."""
+    b64 = base64.b64encode(data_bytes).decode("utf-8")
+    href = f"data:text/csv;base64,{b64}"
+    return f'<a class="joy-icon" href="{href}" download="{filename}" title="{tooltip}">{icon}</a>'
 
 # =========================================================
 # HERO
 # =========================================================
 st.markdown('<div class="joy-card">', unsafe_allow_html=True)
+
 c1, c2 = st.columns([1, 3], vertical_alignment="center")
 
 with c1:
@@ -338,7 +352,7 @@ with c2:
     )
     st.markdown(
         '<div class="joy-lead"><b>Busque por ID ou empresa.</b> '
-        'Use os filtros abaixo ou digite tudo junto (ex.: <b>Leadec saúde histórico desde 10/01/2026</b>).</div>',
+        'Você pode refinar por <b>saúde/odonto</b>, ativar <b>histórico</b> e usar <b>desde dd/mm/aaaa</b>.</div>',
         unsafe_allow_html=True,
     )
 
@@ -350,12 +364,12 @@ with c2:
                 "Pesquisar",
                 value=st.session_state.pending_query,
                 label_visibility="collapsed",
-                placeholder="Ex.: 6163 | Leadec | 6163 histórico | Leadec saúde | desde 10/01/2026",
+                placeholder="Ex.: 6163 | Leadec | 6163 histórico | Leadec saúde | Leadec desde 10/01/2026",
             )
         with s2:
             submitted = st.form_submit_button("Buscar", use_container_width=True)
 
-        st.caption("💡 Dica: você pode clicar nos filtros e depois buscar — não precisa redigitar.")
+        st.caption("💡 Dica: clique nos filtros abaixo e depois em Buscar — não precisa redigitar.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
@@ -366,7 +380,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 st.markdown('<div class="joy-refine">', unsafe_allow_html=True)
 st.markdown('<div class="joy-refine-title">🎛️ Refine sua consulta</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="joy-refine-sub">Clique para aplicar. Isso complementa sua busca automaticamente.</div>',
+    '<div class="joy-refine-sub">Esses botões complementam sua busca automaticamente.</div>',
     unsafe_allow_html=True,
 )
 
@@ -402,47 +416,35 @@ st.markdown(
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
-st.write("")
+# =========================================================
+# RESULT RENDER (JOY à esquerda + toolbar de ícones)
+# =========================================================
+def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, filename: str):
+    """
+    Layout: JOY canto esquerdo, título no meio, toolbar ícones no canto direito.
+    """
+    st.markdown('<div class="joy-result-card">', unsafe_allow_html=True)
 
-# =========================================================
-# RESULT RENDER
-# =========================================================
-def render_header(title: str, consulta_label: str):
-    left, right = st.columns([5, 1.3], vertical_alignment="top")
-    with left:
+    col_left, col_mid, col_right = st.columns([1.0, 4.4, 1.2], vertical_alignment="top")
+
+    with col_left:
+        loop_video_html(VIDEO_SUCCESS, width_px=150)
+
+    with col_mid:
+        st.markdown(f'<div class="joy-result-title">📁 {title}</div>', unsafe_allow_html=True)
         st.markdown(
-            f"""
-<div class="joy-result-head">
-  <div>
-    <div class="joy-result-title">🗂️ {title}</div>
-    <div class="joy-result-sub">Mais recente primeiro • Consulta: <b>{consulta_label}</b></div>
-  </div>
-</div>
-""",
+            f'<div class="joy-result-sub">Mais recente primeiro • Consulta: <b>{consulta_label}</b></div>',
             unsafe_allow_html=True,
         )
-    with right:
-        # vídeo pequeno, SEM quadro
-        loop_video_html(VIDEO_SUCCESS, width_px=165)
 
-def toolbar_export(csv_bytes: bytes, filename: str):
-    st.markdown('<div class="joy-toolbar">', unsafe_allow_html=True)
-    c1, c2 = st.columns([6, 2], vertical_alignment="center")
-    with c1:
-        st.markdown("<small>Exportar:</small>", unsafe_allow_html=True)
-    with c2:
-        st.download_button(
-            "⬇️ CSV",
-            data=csv_bytes,
-            file_name=filename,
-            mime="text/csv",
-            use_container_width=True,
-        )
+    with col_right:
+        # Toolbar com ícones (download CSV)
+        download_link = download_icon_link(csv_bytes, filename, "⬇️", "Exportar CSV")
+        st.markdown(f'<div class="joy-toolbar">{download_link}</div>', unsafe_allow_html=True)
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 def show_history(result: pd.DataFrame, consulta_label: str):
-    render_header("Histórico", consulta_label)
-
     table = result[[COL_DATE, COL_STATUS, COL_PRODUTO, COL_AUTOR, COL_TEXTO]].copy()
     table.rename(
         columns={
@@ -455,9 +457,8 @@ def show_history(result: pd.DataFrame, consulta_label: str):
         inplace=True,
     )
     table["Data"] = pd.to_datetime(table["Data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("—")
-
-    # EXPORT DISCRETO (acima do resultado)
-    toolbar_export(build_csv_bytes(table), f"historico_{consulta_label}.csv")
+    csv_bytes = to_csv_bytes(table)
+    render_result_header("Histórico", consulta_label, csv_bytes, f"historico_{consulta_label}.csv")
 
     st.dataframe(table, use_container_width=True, hide_index=True)
 
@@ -467,8 +468,6 @@ def show_history(result: pd.DataFrame, consulta_label: str):
             st.markdown(f"- **{d}** | **{r[COL_STATUS]}** | {r[COL_TEXTO]} _(por {r[COL_AUTOR]})_")
 
 def show_last_update(result: pd.DataFrame, consulta_label: str):
-    render_header("Última atualização", consulta_label)
-
     r = result.iloc[0]
     d = r[COL_DATE].strftime("%d/%m/%Y") if pd.notna(r[COL_DATE]) else "—"
 
@@ -483,8 +482,8 @@ def show_last_update(result: pd.DataFrame, consulta_label: str):
         "Atualização": r[COL_TEXTO],
     }])
 
-    # EXPORT DISCRETO (acima do conteúdo)
-    toolbar_export(build_csv_bytes(export_df), f"ultima_atualizacao_{consulta_label}.csv")
+    csv_bytes = to_csv_bytes(export_df)
+    render_result_header("Última atualização", consulta_label, csv_bytes, f"ultima_atualizacao_{consulta_label}.csv")
 
     st.markdown(
         f"""
