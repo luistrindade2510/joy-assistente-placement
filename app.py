@@ -142,7 +142,8 @@ with c2:
         unsafe_allow_html=True,
     )
 
- )
+        unsafe_allow_html=True,
+    )
 
 st.markdown("</div>", unsafe_allow_html=True)
 
