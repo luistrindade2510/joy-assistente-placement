@@ -142,20 +142,6 @@ with c2:
         unsafe_allow_html=True,
     )
 
-    st.markdown("**Consultas comuns:**")
-    st.markdown(
-        """
-<span class="joy-chip">6163</span>
-<span class="joy-chip">6163 histórico</span>
-<span class="joy-chip">Leadec</span>
-<span class="joy-chip">Leadec saúde</span>
-<span class="joy-chip">Leadec odonto</span>
-<span class="joy-chip">Leadec desde 10/01/2026</span>
-""",
-        unsafe_allow_html=True,
-    )
-
-st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================
 # FILTROS RÁPIDOS
