@@ -9,7 +9,8 @@ import streamlit as st
 # CONFIG
 # =========================================================
 st.set_page_config(
-    page_title="JOY – Assistente Placement Jr",
+    ASSISTANT_NAME = "LARA"
+    page_title="LARA – Estagiária Placement",
     page_icon="💬",
     layout="centered",
 )
@@ -383,7 +384,7 @@ with c1:
     loop_video_html(VIDEO_IDLE, width_px=165)
 
 with c2:
-    st.markdown('<div class="joy-title">💬 JOY – Assistente Placement Jr</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="joy-title">💬 {ASSISTANT_NAME} – Assistente Placement Jr</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="joy-sub">Status, histórico e andamento dos estudos — sem depender de mensagens no Teams.</div>',
         unsafe_allow_html=True,
