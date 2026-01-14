@@ -1,6 +1,5 @@
 import re
 import base64
-import unicodedata
 from pathlib import Path
 
 import pandas as pd
@@ -210,11 +209,6 @@ div[data-testid="stDataFrame"]{
   border: 1px solid rgba(0,0,0,.08);
 }
 
-/* expander */
-div[data-testid="stExpander"]{
-  border-radius: 14px !important;
-  border: 1px solid rgba(0,0,0,.08) !important;
-}
 </style>
 """,
     unsafe_allow_html=True,
@@ -224,27 +218,11 @@ div[data-testid="stExpander"]{
 # STATE
 # =========================================================
 if "quick_produto" not in st.session_state:
-    st.session_state.quick_produto = None  # SAÚDE | ODONTO | AMBOS
-if "quick_hist" not in st.session_state:
-    st.session_state.quick_hist = False
+    st.session_state.quick_produto = None
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = ""
-
-# =========================================================
-# HELPERS (normalização)
-# =========================================================
-def norm_txt(s: str) -> str:
-    """lower + remove acentos + trim"""
-    s = "" if s is None else str(s)
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    return s.lower().strip()
-
-def safe_filename(s: str) -> str:
-    s = norm_txt(s)
-    s = re.sub(r"[^a-z0-9_-]+", "_", s)
-    s = re.sub(r"_+", "_", s).strip("_")
-    return s or "consulta"
+if "last_run_id" not in st.session_state:
+    st.session_state.last_run_id = 0
 
 # =========================================================
 # VIDEO LOOP (base64)
@@ -279,7 +257,6 @@ def loop_video_html(path: str, width_px: int = 165):
 def load_data(url: str) -> pd.DataFrame:
     df = pd.read_csv(url)
     df.columns = [c.strip() for c in df.columns]
-
     df[COL_DATE] = pd.to_datetime(df[COL_DATE], errors="coerce", dayfirst=True)
     df[COL_ID] = df[COL_ID].astype(str).str.strip()
 
@@ -287,9 +264,24 @@ def load_data(url: str) -> pd.DataFrame:
         if c in df.columns:
             df[c] = df[c].astype(str).fillna("").str.strip()
 
-    # colunas normalizadas (para filtros funcionarem mesmo com/sem acento)
-    df["_empresa_norm"] = df[COL_EMPRESA].map(norm_txt)
-    df["_produto_norm"] = df[COL_PRODUTO].map(norm_txt)
+    # normaliza PRODUTO pra ajudar comparações
+    df["_PRODUTO_N"] = (
+        df[COL_PRODUTO]
+        .astype(str)
+        .str.upper()
+        .str.replace("Ç", "C")
+        .str.replace("Ú", "U")
+        .str.replace("Â", "A")
+        .str.replace("Á", "A")
+        .str.replace("É", "E")
+        .str.replace("Í", "I")
+        .str.replace("Ó", "O")
+        .str.replace("Õ", "O")
+        .str.replace("Ô", "O")
+        .str.replace("Ã", "A")
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
     return df
 
 df = load_data(SHEETS_CSV_URL)
@@ -298,12 +290,13 @@ df = load_data(SHEETS_CSV_URL)
 # PARSE/FILTER
 # =========================================================
 def parse_user_message(msg: str):
-    m = msg.strip()
+    m = (msg or "").strip()
 
+    # histórico permanece suportado via texto, mas sem botão no Refine
     historico = bool(re.search(r"\bhist(ó|o)rico\b|\bhist\b", m, flags=re.I))
 
     produto = None
-    if re.search(r"\bambos\b|\bodonto\+sa(ú|u)de\b", m, flags=re.I):
+    if re.search(r"\bambos\b|\bodonto\+sa(ú|u)de\b|\bsa(ú|u)de\+odonto\b", m, flags=re.I):
         produto = "AMBOS"
     elif re.search(r"\bodonto\b", m, flags=re.I):
         produto = "ODONTO"
@@ -322,7 +315,7 @@ def parse_user_message(msg: str):
     demanda_id = mid.group(1) if mid else None
 
     cleaned = re.sub(r"\bhist(ó|o)rico\b|\bhist\b", "", m, flags=re.I)
-    cleaned = re.sub(r"\bsa(ú|u)de\b|\bodonto\b|\bambos\b|\bodonto\+sa(ú|u)de\b", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\bsa(ú|u)de\b|\bodonto\b|\bambos\b|\bodonto\+sa(ú|u)de\b|\bsa(ú|u)de\+odonto\b", "", cleaned, flags=re.I)
     cleaned = re.sub(r"desde\s+\d{1,2}/\d{1,2}/\d{4}", "", cleaned, flags=re.I)
     cleaned = cleaned.strip(" -|,;")
 
@@ -332,20 +325,39 @@ def parse_user_message(msg: str):
 
     return demanda_id, empresa_term, produto, historico, date_since
 
-def filter_df(df: pd.DataFrame, demanda_id=None, empresa_term=None, produto=None, date_since=None):
-    out = df.copy()
+def match_produto_series(prod_n: pd.Series, produto: str) -> pd.Series:
+    """
+    Regras:
+    - SAÚDE: só linhas "SAUDE" (puro) — não aceita "SAUDE + ODONTO"
+    - ODONTO: só linhas "ODONTO" (puro)
+    - AMBOS: linhas que contenham SAUDE e ODONTO juntas (qualquer separador)
+    """
+    # normaliza separadores comuns
+    s = prod_n.str.replace("&", " E ").str.replace("/", " ").str.replace("+", " ").str.replace("-", " ")
+
+    has_saude = s.str.contains(r"\bSAUDE\b", na=False)
+    has_odonto = s.str.contains(r"\bODONTO\b", na=False)
+
+    if produto == "SAÚDE":
+        return has_saude & (~has_odonto)
+    if produto == "ODONTO":
+        return has_odonto & (~has_saude)
+    if produto == "AMBOS":
+        return has_saude & has_odonto
+    return pd.Series([True] * len(prod_n), index=prod_n.index)
+
+def filter_df(df_in: pd.DataFrame, demanda_id=None, empresa_term=None, produto=None, date_since=None):
+    out = df_in.copy()
 
     if demanda_id:
         out = out[out[COL_ID] == str(demanda_id)]
 
     if empresa_term:
-        term = norm_txt(empresa_term)
-        out = out[out["_empresa_norm"].str.contains(term, na=False)]
+        term = empresa_term.lower()
+        out = out[out[COL_EMPRESA].str.lower().str.contains(term, na=False)]
 
-    # produto (normalizado para resolver SAUDE vs SAÚDE)
-    if produto and produto != "AMBOS":
-        prod_norm = norm_txt(produto)  # "saude" ou "odonto"
-        out = out[out["_produto_norm"].str.contains(prod_norm, na=False)]
+    if produto:
+        out = out[match_produto_series(out["_PRODUTO_N"], produto)]
 
     if date_since is not None:
         out = out[out[COL_DATE] >= date_since]
@@ -356,7 +368,6 @@ def to_csv_bytes(df_export: pd.DataFrame) -> bytes:
     return df_export.to_csv(index=False).encode("utf-8")
 
 def download_icon_link(data_bytes: bytes, filename: str, icon: str, tooltip: str):
-    """Link HTML com ícone (estilo toolbar do print)."""
     b64 = base64.b64encode(data_bytes).decode("utf-8")
     href = f"data:text/csv;base64,{b64}"
     return f'<a class="joy-icon" href="{href}" download="{filename}" title="{tooltip}">{icon}</a>'
@@ -379,7 +390,8 @@ with c2:
     )
     st.markdown(
         '<div class="joy-lead"><b>Busque por ID ou empresa.</b> '
-        'Você pode refinar por <b>saúde/odonto</b>, ativar <b>histórico</b> e usar <b>desde dd/mm/aaaa</b>.</div>',
+        'Refine por <b>saúde</b>, <b>odonto</b> ou <b>ambos</b> e use <b>desde dd/mm/aaaa</b>. '
+        'Se quiser histórico, escreva <b>histórico</b> na busca.</div>',
         unsafe_allow_html=True,
     )
 
@@ -402,20 +414,19 @@ with c2:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================================================
-# REFINE
+# REFINE (sem histórico aqui)
 # =========================================================
 st.markdown('<div class="joy-refine">', unsafe_allow_html=True)
 st.markdown('<div class="joy-refine-title">🎛️ Refine sua consulta</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="joy-refine-sub">Esses botões complementam sua busca automaticamente.</div>',
+    '<div class="joy-refine-sub">Esses botões ajustam o produto do filtro. Histórico fica no texto (ex.: “6163 histórico”).</div>',
     unsafe_allow_html=True,
 )
 
-p1, p2, p3, p4, p5 = st.columns([1.2, 1.2, 1.2, 1.2, 1.6], vertical_alignment="center")
+p1, p2, p3, p4 = st.columns([1.2, 1.2, 1.2, 1.2], vertical_alignment="center")
 with p1:
     if st.button("🧽 Limpar", use_container_width=True):
         st.session_state.quick_produto = None
-        st.session_state.quick_hist = False
 with p2:
     if st.button("🩺 Saúde", use_container_width=True):
         st.session_state.quick_produto = "SAÚDE"
@@ -425,18 +436,12 @@ with p3:
 with p4:
     if st.button("🩺+🦷 Ambos", use_container_width=True):
         st.session_state.quick_produto = "AMBOS"
-with p5:
-    label = "🗂️ Histórico: OFF" if not st.session_state.quick_hist else "✅ Histórico: ON"
-    if st.button(label, use_container_width=True):
-        st.session_state.quick_hist = not st.session_state.quick_hist
 
 prod_txt = st.session_state.quick_produto if st.session_state.quick_produto else "—"
-modo_txt = "Histórico" if st.session_state.quick_hist else "Última atualização"
 st.markdown(
     f"""
 <div style="margin-top:10px;">
   <span class="joy-badge"><b>Produto:</b> {prod_txt}</span>
-  <span class="joy-badge"><b>Modo:</b> {modo_txt}</span>
 </div>
 """,
     unsafe_allow_html=True,
@@ -444,12 +449,9 @@ st.markdown(
 st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================================================
-# RESULT RENDER (JOY à esquerda + toolbar de ícones)
+# RESULT RENDER
 # =========================================================
 def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, filename: str):
-    """
-    Layout: JOY canto esquerdo, título no meio, toolbar ícones no canto direito.
-    """
     st.markdown('<div class="joy-result-card">', unsafe_allow_html=True)
 
     col_left, col_mid, col_right = st.columns([1.0, 4.4, 1.2], vertical_alignment="top")
@@ -484,8 +486,7 @@ def show_history(result: pd.DataFrame, consulta_label: str):
     )
     table["Data"] = pd.to_datetime(table["Data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("—")
     csv_bytes = to_csv_bytes(table)
-    fn = f"historico_{safe_filename(consulta_label)}.csv"
-    render_result_header("Histórico", consulta_label, csv_bytes, fn)
+    render_result_header("Histórico", consulta_label, csv_bytes, f"historico_{consulta_label}.csv")
     st.dataframe(table, use_container_width=True, hide_index=True)
 
 def show_last_update(result: pd.DataFrame, consulta_label: str):
@@ -504,8 +505,7 @@ def show_last_update(result: pd.DataFrame, consulta_label: str):
     }])
 
     csv_bytes = to_csv_bytes(export_df)
-    fn = f"ultima_atualizacao_{safe_filename(consulta_label)}.csv"
-    render_result_header("Última atualização", consulta_label, csv_bytes, fn)
+    render_result_header("Última atualização", consulta_label, csv_bytes, f"ultima_atualizacao_{consulta_label}.csv")
 
     st.markdown(
         f"""
@@ -527,18 +527,16 @@ def run_query(q: str):
         st.warning("Digite um ID ou uma empresa para pesquisar.")
         return
 
-    # mensagem humana (somente texto, sem vídeo no loading)
-    msg = "Opa! Só um segundinho… deixa eu puxar isso aqui pra você 🔎"
-    with st.status(msg, expanded=False):
-        demanda_id, empresa_term, produto, historico, date_since = parse_user_message(q)
+    # mensagem humana (sem vídeo de loading, só mensagem)
+    st.info("Opa! Só um segundinho… deixa eu puxar isso aqui pra você 🔎")
 
-        # aplica refine se não veio no texto
-        if not produto and st.session_state.quick_produto:
-            produto = st.session_state.quick_produto
-        if not historico and st.session_state.quick_hist:
-            historico = True
+    demanda_id, empresa_term, produto, historico, date_since = parse_user_message(q)
 
-        result = filter_df(df, demanda_id, empresa_term, produto, date_since)
+    # aplica refine se não veio no texto
+    if not produto and st.session_state.quick_produto:
+        produto = st.session_state.quick_produto
+
+    result = filter_df(df, demanda_id, empresa_term, produto, date_since)
 
     if result.empty:
         st.error("Opa, desculpa! Não encontrei nada com esses critérios. Tenta só ID (6163) ou só empresa (Leadec).")
@@ -552,7 +550,13 @@ def run_query(q: str):
         show_last_update(result, consulta_label)
 
 # =========================================================
-# RUN
+# RUN (limpa/recarrega resultado com "run id")
 # =========================================================
 if "submitted" in locals() and submitted:
-    run_query(st.session_state.pending_query)
+    # incrementa pra forçar rerender limpo / visual de produto
+    st.session_state.last_run_id += 1
+
+# container de resultado "limpo" por run
+with st.container(key=f"result_container_{st.session_state.last_run_id}"):
+    if "submitted" in locals() and submitted:
+        run_query(st.session_state.pending_query)
