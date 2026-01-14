@@ -8,9 +8,11 @@ import streamlit as st
 # =========================================================
 # CONFIG
 # =========================================================
+ASSISTANT_NAME = "LARA"
+APP_TITLE = f"{ASSISTANT_NAME} – Estagiária Placement"
+
 st.set_page_config(
-    ASSISTANT_NAME = "LARA"
-    page_title="LARA – Estagiária Placement",
+    page_title=APP_TITLE,
     page_icon="💬",
     layout="centered",
 )
