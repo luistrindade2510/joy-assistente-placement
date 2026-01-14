@@ -459,15 +459,16 @@ with c1:
 with c2:
     st.markdown(f'<div class="joy-title">💬 {ASSISTANT_NAME} – Estagiária Placement</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="joy-sub">Status, histórico e andamento dos estudos — sem depender de mensagens no Teams.</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="joy-lead"><b>Busque por ID ou empresa.</b> '
-        'Refine por <b>saúde</b>, <b>odonto</b> ou <b>ambos</b> e use <b>desde dd/mm/aaaa</b>. '
-        'Se quiser histórico, escreva <b>histórico</b> na busca.</div>',
-        unsafe_allow_html=True,
-    )
+    '<div class="joy-sub">Status, histórico e atualizações dos estudos — sem depender de mensagens no Teams.</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="joy-lead"><b>Deixa comigo 😉</b><br>'
+    'Eu te ajudo a acompanhar status, histórico e atualizações dos estudos — '
+    'sem dor de cabeça e sem Teams.</div>',
+    unsafe_allow_html=True,
+)
 
     st.markdown('<div class="joy-search-wrap">', unsafe_allow_html=True)
     with st.form("search_form", clear_on_submit=False):
