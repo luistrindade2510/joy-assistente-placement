@@ -1,4 +1,5 @@
 import re
+import time
 import base64
 from pathlib import Path
 
@@ -17,8 +18,10 @@ st.set_page_config(
     layout="centered",
 )
 
-VIDEO_IDLE = "joy_idle.mp4"
-VIDEO_SUCCESS = "joy_success.mp4"
+# Arquivos renomeados (GitHub)
+VIDEO_IDLE = "Lara_idle.mp4"
+VIDEO_LOADING = "Lara_loading.mp4"
+VIDEO_SUCCESS = "Lara_success.mp4"
 
 SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7eJXK_IARZPmt6GdsQLDPX4sSI-aCWZK286Y4DtwhVXr3NOH22eTIPwkFSbF14rfdYReQndgU51st/pub?gid=0&single=true&output=csv"
 
@@ -30,6 +33,7 @@ COL_PRODUTO = "PRODUTO"
 COL_AUTOR = "AUTOR"
 COL_STATUS = "STATUS"
 COL_TEXTO = "TEXTO"
+
 
 # =========================================================
 # CSS (premium + toolbar ícones)
@@ -211,7 +215,6 @@ div[data-testid="stDataFrame"]{
   overflow: hidden;
   border: 1px solid rgba(0,0,0,.08);
 }
-
 </style>
 """,
     unsafe_allow_html=True,
@@ -222,10 +225,12 @@ div[data-testid="stDataFrame"]{
 # =========================================================
 if "quick_produto" not in st.session_state:
     st.session_state.quick_produto = None
+
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = ""
-if "last_run_id" not in st.session_state:
-    st.session_state.last_run_id = 0
+
+if "result_payload" not in st.session_state:
+    st.session_state.result_payload = None  # guarda o último resultado (produto)
 
 # =========================================================
 # VIDEO LOOP (base64)
@@ -237,7 +242,7 @@ def video_to_data_url(path: str) -> str:
     return f"data:video/mp4;base64,{b64}"
 
 def loop_video_html(path: str, width_px: int = 165):
-    """Vídeo em loop/autoplay/muted, sem controles (não vira 'player')"""
+    """Vídeo em loop/autoplay/muted, sem controles."""
     try:
         url = video_to_data_url(path)
     except Exception:
@@ -295,7 +300,6 @@ df = load_data(SHEETS_CSV_URL)
 def parse_user_message(msg: str):
     m = (msg or "").strip()
 
-    # histórico permanece suportado via texto, mas sem botão no Refine
     historico = bool(re.search(r"\bhist(ó|o)rico\b|\bhist\b", m, flags=re.I))
 
     produto = None
@@ -318,7 +322,12 @@ def parse_user_message(msg: str):
     demanda_id = mid.group(1) if mid else None
 
     cleaned = re.sub(r"\bhist(ó|o)rico\b|\bhist\b", "", m, flags=re.I)
-    cleaned = re.sub(r"\bsa(ú|u)de\b|\bodonto\b|\bambos\b|\bodonto\+sa(ú|u)de\b|\bsa(ú|u)de\+odonto\b", "", cleaned, flags=re.I)
+    cleaned = re.sub(
+        r"\bsa(ú|u)de\b|\bodonto\b|\bambos\b|\bodonto\+sa(ú|u)de\b|\bsa(ú|u)de\+odonto\b",
+        "",
+        cleaned,
+        flags=re.I,
+    )
     cleaned = re.sub(r"desde\s+\d{1,2}/\d{1,2}/\d{4}", "", cleaned, flags=re.I)
     cleaned = cleaned.strip(" -|,;")
 
@@ -331,13 +340,19 @@ def parse_user_message(msg: str):
 def match_produto_series(prod_n: pd.Series, produto: str) -> pd.Series:
     """
     Regras:
-    - SAÚDE: só linhas "SAUDE" (puro) — não aceita "SAUDE + ODONTO"
-    - ODONTO: só linhas "ODONTO" (puro)
-    - AMBOS: linhas que contenham SAUDE e ODONTO juntas (qualquer separador)
+    - SAÚDE: só SAUDE (sem ODONTO)
+    - ODONTO: só ODONTO (sem SAUDE)
+    - AMBOS: precisa conter SAUDE e ODONTO
     """
-    # normaliza separadores comuns
-    s = prod_n.str.replace("&", " E ").str.replace("/", " ").str.replace("+", " ").str.replace("-", " ")
-
+    s = (
+        prod_n.astype(str)
+        .str.replace("&", " ", regex=False)
+        .str.replace("/", " ", regex=False)
+        .str.replace("+", " ", regex=False)
+        .str.replace("-", " ", regex=False)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
     has_saude = s.str.contains(r"\bSAUDE\b", na=False)
     has_odonto = s.str.contains(r"\bODONTO\b", na=False)
 
@@ -374,6 +389,7 @@ def download_icon_link(data_bytes: bytes, filename: str, icon: str, tooltip: str
     b64 = base64.b64encode(data_bytes).decode("utf-8")
     href = f"data:text/csv;base64,{b64}"
     return f'<a class="joy-icon" href="{href}" download="{filename}" title="{tooltip}">{icon}</a>'
+
 
 # =========================================================
 # HERO
@@ -416,13 +432,14 @@ with c2:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
+
 # =========================================================
-# REFINE (sem histórico aqui)
+# REFINE
 # =========================================================
 st.markdown('<div class="joy-refine">', unsafe_allow_html=True)
 st.markdown('<div class="joy-refine-title">🎛️ Refine sua consulta</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="joy-refine-sub">Esses botões ajustam o produto do filtro. Histórico fica no texto (ex.: “6163 histórico”).</div>',
+    '<div class="joy-refine-sub">Esses botões ajustam o produto do filtro.</div>',
     unsafe_allow_html=True,
 )
 
@@ -451,8 +468,9 @@ st.markdown(
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
+
 # =========================================================
-# RESULT RENDER
+# RESULT UI
 # =========================================================
 def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, filename: str):
     st.markdown('<div class="joy-result-card">', unsafe_allow_html=True)
@@ -463,7 +481,7 @@ def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, file
         loop_video_html(VIDEO_SUCCESS, width_px=150)
 
     with col_mid:
-        st.markdown(f'<div class="joy-result-title">📁 {title}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="joy-result-title">💬 {title}</div>', unsafe_allow_html=True)
         st.markdown(
             f'<div class="joy-result-sub">Mais recente primeiro • Consulta: <b>{consulta_label}</b></div>',
             unsafe_allow_html=True,
@@ -488,6 +506,7 @@ def show_history(result: pd.DataFrame, consulta_label: str):
         inplace=True,
     )
     table["Data"] = pd.to_datetime(table["Data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("—")
+
     csv_bytes = to_csv_bytes(table)
     render_result_header("Histórico", consulta_label, csv_bytes, f"historico_{consulta_label}.csv")
     st.dataframe(table, use_container_width=True, hide_index=True)
@@ -524,42 +543,72 @@ def show_last_update(result: pd.DataFrame, consulta_label: str):
 """
     )
 
-def run_query(q: str):
+# =========================================================
+# RUN QUERY (produto + loading humanizado)
+# =========================================================
+SEARCH_PHRASES = [
+    "Opa! Só um segundinho… deixa eu puxar isso aqui pra você 🔎",
+    "Beleza! Tô indo buscar as infos — já já eu volto com tudo 💨",
+    "Entendi 🙂 deixa comigo… tô consultando aqui rapidinho 🔍",
+    "Tá! Só um instante que eu vou checar isso pra você 🧠✨",
+    "Certo! Tô abrindo os dados agora — um tiquinho só 👀",
+]
+
+def run_query_and_store(q: str):
     q = (q or "").strip()
     if not q:
-        st.warning("Digite um ID ou uma empresa para pesquisar.")
+        st.session_state.result_payload = {"type": "empty"}
         return
 
-    # mensagem humana (sem vídeo de loading, só mensagem)
-    st.info("Opa! Só um segundinho… deixa eu puxar isso aqui pra você 🔎")
-
-    demanda_id, empresa_term, produto, historico, date_since = parse_user_message(q)
+    demand_id, empresa_term, produto_texto, historico, date_since = parse_user_message(q)
 
     # aplica refine se não veio no texto
-    if not produto and st.session_state.quick_produto:
-        produto = st.session_state.quick_produto
+    produto = produto_texto or st.session_state.quick_produto
 
-    result = filter_df(df, demanda_id, empresa_term, produto, date_since)
+    # loading humanizado + vídeo loading
+    loading_slot = st.empty()
+    with loading_slot:
+        st.info(SEARCH_PHRASES[int(time.time()) % len(SEARCH_PHRASES)])
+        loop_video_html(VIDEO_LOADING, width_px=150)
+
+    # (opcional) micro delay só pra sensação de “buscando”
+    time.sleep(0.25)
+
+    result = filter_df(df, demand_id, empresa_term, produto, date_since)
+
+    loading_slot.empty()
 
     if result.empty:
-        st.error("Opa, desculpa! Não encontrei nada com esses critérios. Tenta só ID (6163) ou só empresa (Leadec).")
+        st.session_state.result_payload = {
+            "type": "not_found",
+            "msg": "Opa, desculpa! Não encontrei nada com esses critérios. "
+                   "Tenta só ID (6163) ou só empresa (Leadec).",
+        }
         return
 
-    consulta_label = demanda_id or (empresa_term if empresa_term else "consulta")
+    consulta_label = demand_id or (empresa_term if empresa_term else "consulta")
 
-    if historico:
-        show_history(result, consulta_label)
-    else:
-        show_last_update(result, consulta_label)
+    st.session_state.result_payload = {
+        "type": "history" if historico else "last",
+        "consulta_label": consulta_label,
+        "df": result,
+    }
 
-# =========================================================
-# RUN (limpa/recarrega resultado com "run id")
-# =========================================================
+# dispara busca quando clicar em Buscar
 if "submitted" in locals() and submitted:
-    # incrementa pra forçar rerender limpo / visual de produto
-    st.session_state.last_run_id += 1
+    run_query_and_store(st.session_state.pending_query)
 
-# container de resultado "limpo" por run
-with st.container(key=f"result_container_{st.session_state.last_run_id}"):
-    if "submitted" in locals() and submitted:
-        run_query(st.session_state.pending_query)
+# =========================================================
+# RENDER RESULT (sempre substitui o anterior)
+# =========================================================
+payload = st.session_state.result_payload
+
+if payload:
+    if payload["type"] == "not_found":
+        st.error(payload["msg"])
+
+    elif payload["type"] == "history":
+        show_history(payload["df"], payload["consulta_label"])
+
+    elif payload["type"] == "last":
+        show_last_update(payload["df"], payload["consulta_label"])
