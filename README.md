@@ -1,2 +1,2 @@
-# LARA-Estagiária-Placement
-LARA - Estagiária de acompanhamento de demandas de Placement
+# LARA, a Estagiário Virtual da Acrisure
+Estagiária de acompanhamento de demandas de Placement
