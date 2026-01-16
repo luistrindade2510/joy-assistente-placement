@@ -18,18 +18,17 @@ st.set_page_config(
     layout="centered",
 )
 
-ASSET_DIR = Path("assets") / "lara"
+# Assets
+BASE_DIR = Path(__file__).parent
+ASSETS_DIR = BASE_DIR / "assets" / "lara"
 
-VIDEO_HERO = ASSET_DIR / "Lara_idle.mp4"  # topo: sempre o mesmo
-
-SUCCESS_VARIANTS = [
-    ASSET_DIR / "Lara_success.mp4",
-    ASSET_DIR / "Lara_01.mp4",
-    ASSET_DIR / "Lara_02.mp4",
+VIDEO_IDLE = ASSETS_DIR / "Lara_idle.mp4"  # topo (fixo)
+RESULT_VIDEOS_CANDIDATES = [
+    ASSETS_DIR / "Lara_success.mp4",
+    ASSETS_DIR / "Lara_01.mp4",
+    ASSETS_DIR / "Lara_02.mp4",
 ]
-
-# “Corte” pra matar as linhas/contornos que aparecem nas bordas do vídeo
-VIDEO_CROP_PX = 1  # aumenta pra 2 se ainda aparecer
+RESULT_VIDEOS = [p for p in RESULT_VIDEOS_CANDIDATES if p.exists()]
 
 SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT7eJXK_IARZPmt6GdsQLDPX4sSI-aCWZK286Y4DtwhVXr3NOH22eTIPwkFSbF14rfdYReQndgU51st/pub?gid=0&single=true&output=csv"
 
@@ -43,135 +42,173 @@ COL_STATUS = "STATUS"
 COL_TEXTO = "TEXTO"
 
 # =========================================================
-# CSS (premium + vídeo “sem quadro” + crop anti-linhas + toolbar)
+# COPY (mensagens variáveis)
+# =========================================================
+BUSCANDO_FOFINHAS = [
+    "Fechou. Tô buscando as atualizações agora 🔎",
+    "Só um segundinho… deixa eu puxar isso aqui pra você 🧾",
+    "Calma aí que eu já volto com tudo organizadinho ✨",
+    "Tô indo lá no arquivo rapidinho… já já volto 🗂️",
+    "Deixa comigo! Vou checar direitinho agora 👀",
+    "Ok! Tô consultando aqui — já te retorno 😄",
+    "Um instante… tô validando pra não te passar nada errado ✅",
+    "Tô no modo estagiária aplicada: buscando tudo agora 🫡",
+    "Segura aí: tô cruzando as infos rapidinho ⚡",
+    "Já já isso aparece na tela, confia 💛",
+    "Pera aí… tô confirmando os registros 📌",
+    "Indo buscar… (sem fazer barulho pra não acordar o sistema) 🤫",
+    "Tô puxando a última atualização agora 🧠",
+    "Ok, consulta em andamento… já volto 👇",
+    "Só mais um instante, por favor 🙏",
+    "Partiu caçar esse dado 🕵️‍♀️",
+    "Deixa eu checar mais um detalhe e eu te trago 🙈",
+    "Tô organizando pra ficar bonito e claro ✍️",
+    "Buscando… com foco, força e planilha 😄",
+    "Já te devolvo isso mastigadinho 🍬",
+    "Um segundinho… tô abrindo a gavetinha certa 🗃️",
+    "Ok! Tô indo na fonte agora 💧",
+    "Aguenta aí: já tô com a mão na massa 👩‍💻",
+    "Tô verificando aqui com carinho 💙",
+    "Consulta rodando… 🚀",
+    "Analisando os mais recentes… 🧾",
+    "Tá indo, tá indo… 😅",
+    "Só um instante… eu já volto com a resposta 👌",
+    "Buscando com atenção total 🎯",
+    "Ok! Deixa eu confirmar e já te mostro 🧩",
+]
+
+RESULTADO_FOFINHAS = [
+    "Achei! Tá aqui embaixo 👇",
+    "Prontinho — trouxe o que encontrei ✅",
+    "Resultado na tela! Se quiser, exporta no ícone aí 😉",
+    "Tcharam! Encontrei 😄",
+    "Conferido e entregue ✨",
+    "Aqui está — organizado do mais recente pro mais antigo 🗂️",
+    "Localizei! Dá uma olhada 👀",
+    "Tá na mão 💛",
+    "Encontrei sim — segue abaixo 👇",
+    "Pronto! Se quiser refinar depois, eu te ajudo 😄",
+    "Achei e já deixei no jeitinho 🙌",
+    "Resultado carregado ✅",
+    "Aqui ó 👇",
+    "Voltei com as informações! 🧾",
+    "Encontrei registros compatíveis ✅",
+    "Feito! Separei tudo aqui pra você 🫶",
+    "Ok — trouxe a última atualização disponível 📌",
+    "Achei rapidinho, viu? 😎",
+    "Tá pronto — bora! 🚀",
+    "Aqui está o retorno da consulta ✅",
+    "Encontrei e já organizei a visão pra ficar limpo 🧼",
+    "Pronto! 👇",
+    "Tá aí! Se não era isso, me fala como você buscou 😉",
+    "Fechou — retorno exibido ✅",
+    "Ok! Tudo certo por aqui 🧠",
+    "Achei! Quer que eu puxe histórico também? (só escrever “histórico”) 😄",
+    "Encontrei e deixei fácil de exportar 📤",
+    "Pronto — sem dor de cabeça 😌",
+    "Localizado ✅",
+    "Concluído — pode seguir 👍",
+]
+
+def pick_busca_msg():
+    return random.choice(BUSCANDO_FOFINHAS)
+
+def pick_result_msg():
+    return random.choice(RESULTADO_FOFINHAS)
+
+# =========================================================
+# CSS (premium + remove "quadro" + crop anti-borda)
 # =========================================================
 st.markdown(
-    f"""
+    """
 <style>
-.block-container{{
+.block-container{
   padding-top: 1.2rem;
   padding-bottom: 1.2rem;
   max-width: 1040px;
-}}
+}
 
 /* Card topo */
-.joy-card{{
+.joy-card{
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 18px;
   padding: 18px 18px 14px 18px;
   background: rgba(255,255,255,.92);
   box-shadow: 0 14px 35px rgba(0,0,0,.06);
-}}
+}
 
-.joy-title{{
+.joy-title{
   font-size: 30px;
   line-height: 1.05;
   margin: 0 0 6px 0;
   font-weight: 900;
   letter-spacing: -0.3px;
-}}
-.joy-sub{{
+}
+.joy-sub{
   color: rgba(0,0,0,.62);
   font-size: 14px;
-  margin: 0 0 8px 0;
-}}
-.joy-lead{{
+  margin: 0 0 10px 0;
+}
+.joy-lead{
   font-size: 15.5px;
   line-height: 1.35;
   margin: 0 0 10px 0;
-}}
-.joy-lead b{{ font-weight: 900; }}
-
-/* Vídeo: wrapper com fundo branco + overflow hidden + CROP pra matar linhas */
-.joy-video-wrap{{
-  width: 165px;
-  max-width: 165px;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}}
-
-.joy-video-crop{{
-  width: 165px;
-  background: #fff !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  overflow: hidden !important;
-  border-radius: 0 !important;
-}}
-
-.joy-video{{
-  width: 165px;
-  height: auto;
-  display:block;
-  background: #fff !important;
-  border: 0 !important;
-  outline: none !important;
-  box-shadow: none !important;
-
-  /* corta 1px (ou mais) das bordas pra remover “linhas” */
-  clip-path: inset({VIDEO_CROP_PX}px {VIDEO_CROP_PX}px {VIDEO_CROP_PX}px {VIDEO_CROP_PX}px);
-
-  /* ajuda contra artefatos por scaling */
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  object-fit: contain;
-}}
+}
+.joy-lead b{ font-weight: 900; }
 
 /* Search box */
-.joy-search-wrap{{
+.joy-search-wrap{
   margin-top: 12px;
   padding: 12px;
   border-radius: 14px;
   border: 1px solid rgba(0,0,0,.08);
   background: rgba(0,0,0,.02);
-}}
+}
 
-div[data-baseweb="input"] > div{{
+div[data-baseweb="input"] > div{
   border-radius: 14px !important;
-}}
-div[data-baseweb="input"] input{{
+}
+div[data-baseweb="input"] input{
   font-size: 15px !important;
   padding-top: 14px !important;
   padding-bottom: 14px !important;
-}}
+}
 
-.stButton button{{
+.stButton button{
   border-radius: 14px !important;
   height: 48px !important;
   font-weight: 900 !important;
   border: 1px solid rgba(0,0,0,.14) !important;
-}}
-.stButton button:hover{{
+}
+.stButton button:hover{
   border-color: rgba(0,0,0,.25) !important;
   transform: translateY(-1px);
-}}
+}
 
-/* Result card + toolbar */
-.joy-result-card{{
+/* Result card */
+.joy-result-card{
   margin-top: 14px;
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 18px;
   padding: 14px 14px 12px 14px;
   background: rgba(255,255,255,.92);
   box-shadow: 0 14px 35px rgba(0,0,0,.06);
-}}
+}
 
-.joy-result-title{{
+.joy-result-title{
   font-size: 28px;
   font-weight: 950;
   margin: 0;
   letter-spacing: -0.35px;
-}}
-.joy-result-sub{{
+}
+.joy-result-sub{
   color: rgba(0,0,0,.55);
   font-size: 13.5px;
   margin-top: 6px;
-}}
+}
 
-.joy-toolbar{{
+/* Toolbar (ícone export) */
+.joy-toolbar{
   display:flex;
   justify-content:flex-end;
   align-items:center;
@@ -182,8 +219,8 @@ div[data-baseweb="input"] input{{
   border-radius: 12px;
   width: fit-content;
   margin-left: auto;
-}}
-.joy-icon{{
+}
+.joy-icon{
   display:inline-flex;
   width: 34px;
   height: 30px;
@@ -196,26 +233,57 @@ div[data-baseweb="input"] input{{
   color: rgba(0,0,0,.70);
   font-size: 15px;
   line-height: 1;
-}}
-.joy-icon:hover{{
+}
+.joy-icon:hover{
   background: rgba(0,0,0,.05);
   border-color: rgba(0,0,0,.18);
   color: rgba(0,0,0,.88);
-}}
+}
 
 /* tabela */
-div[data-testid="stDataFrame"]{{
+div[data-testid="stDataFrame"]{
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid rgba(0,0,0,.08);
-}}
+}
+
+/* ========== VIDEO (ANTI "LINHA PRETA") ==========
+   A ideia:
+   - wrapper branco + overflow hidden
+   - corta borda com padding negativo via margin e leve scale
+*/
+.lara-video-wrap{
+  width: 170px;
+  max-width: 170px;
+  background: #ffffff !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border-radius: 0 !important;
+}
+.lara-video{
+  width: 170px;
+  height: auto;
+  display:block;
+  background: #ffffff !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+
+  /* CROP: remove 1~2px de borda indesejada */
+  transform: scale(1.03);
+  transform-origin: center center;
+  margin: -2px;
+}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
 # =========================================================
-# STATE
+# STATE (para limpar/reciclar resultado a cada busca)
 # =========================================================
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = ""
@@ -223,7 +291,7 @@ if "last_run_id" not in st.session_state:
     st.session_state.last_run_id = 0
 
 # =========================================================
-# VIDEO (base64)
+# VIDEO LOOP (base64)
 # =========================================================
 @st.cache_data(show_spinner=False)
 def video_to_data_url(path: str) -> str:
@@ -231,31 +299,25 @@ def video_to_data_url(path: str) -> str:
     b64 = base64.b64encode(data).decode("utf-8")
     return f"data:video/mp4;base64,{b64}"
 
-def loop_video_html(path: Path, width_px: int = 165):
-    """Vídeo em loop/autoplay/muted, sem controles e sem “quadro”."""
+def loop_video_html(path: Path, width_px: int = 170):
+    """
+    Vídeo em loop/autoplay/muted, sem controles.
+    Com CSS anti-borda (crop) pra sumir "linha preta".
+    """
     try:
         url = video_to_data_url(str(path))
     except Exception:
         return
     st.markdown(
         f"""
-<div class="joy-video-wrap">
-  <div class="joy-video-crop">
-    <video class="joy-video" width="{width_px}" autoplay muted loop playsinline preload="auto">
-      <source src="{url}" type="video/mp4">
-    </video>
-  </div>
+<div class="lara-video-wrap" style="width:{width_px}px;max-width:{width_px}px;">
+  <video class="lara-video" width="{width_px}" autoplay muted loop playsinline preload="auto">
+    <source src="{url}" type="video/mp4">
+  </video>
 </div>
 """,
         unsafe_allow_html=True,
     )
-
-def pick_success_video(seed: int) -> Path:
-    candidates = [p for p in SUCCESS_VARIANTS if p.exists()]
-    if not candidates:
-        return SUCCESS_VARIANTS[0]
-    rng = random.Random(seed)
-    return rng.choice(candidates)
 
 # =========================================================
 # DATA
@@ -271,29 +333,12 @@ def load_data(url: str) -> pd.DataFrame:
         if c in df.columns:
             df[c] = df[c].astype(str).fillna("").str.strip()
 
-    df["_PRODUTO_N"] = (
-        df[COL_PRODUTO]
-        .astype(str)
-        .str.upper()
-        .str.replace("Ç", "C")
-        .str.replace("Ú", "U")
-        .str.replace("Â", "A")
-        .str.replace("Á", "A")
-        .str.replace("É", "E")
-        .str.replace("Í", "I")
-        .str.replace("Ó", "O")
-        .str.replace("Õ", "O")
-        .str.replace("Ô", "O")
-        .str.replace("Ã", "A")
-        .str.replace(r"\s+", " ", regex=True)
-        .str.strip()
-    )
     return df
 
 df = load_data(SHEETS_CSV_URL)
 
 # =========================================================
-# PARSE/FILTER (continua aceitando: saúde/odonto/ambos + histórico + desde)
+# PARSE/FILTER
 # =========================================================
 def parse_user_message(msg: str):
     m = (msg or "").strip()
@@ -320,7 +365,12 @@ def parse_user_message(msg: str):
     demanda_id = mid.group(1) if mid else None
 
     cleaned = re.sub(r"\bhist(ó|o)rico\b|\bhist\b", "", m, flags=re.I)
-    cleaned = re.sub(r"\bsa(ú|u)de\b|\bodonto\b|\bambos\b|\bodonto\+sa(ú|u)de\b|\bsa(ú|u)de\+odonto\b", "", cleaned, flags=re.I)
+    cleaned = re.sub(
+        r"\bsa(ú|u)de\b|\bodonto\b|\bambos\b|\bodonto\+sa(ú|u)de\b|\bsa(ú|u)de\+odonto\b",
+        "",
+        cleaned,
+        flags=re.I,
+    )
     cleaned = re.sub(r"desde\s+\d{1,2}/\d{1,2}/\d{4}", "", cleaned, flags=re.I)
     cleaned = cleaned.strip(" -|,;")
 
@@ -330,35 +380,26 @@ def parse_user_message(msg: str):
 
     return demanda_id, empresa_term, produto, historico, date_since
 
-def match_produto_series(prod_n: pd.Series, produto: str) -> pd.Series:
-    s = (
-        prod_n.astype(str)
-        .str.replace("&", " E ")
-        .str.replace("/", " ")
-        .str.replace("+", " ")
-        .str.replace("-", " ")
-    )
-    has_saude = s.str.contains(r"\bSAUDE\b", na=False)
-    has_odonto = s.str.contains(r"\bODONTO\b", na=False)
-
-    if produto == "SAÚDE":
-        return has_saude & (~has_odonto)
-    if produto == "ODONTO":
-        return has_odonto & (~has_saude)
-    if produto == "AMBOS":
-        return has_saude & has_odonto
-    return pd.Series([True] * len(prod_n), index=prod_n.index)
-
 def filter_df(df_in: pd.DataFrame, demanda_id=None, empresa_term=None, produto=None, date_since=None):
     out = df_in.copy()
 
     if demanda_id:
         out = out[out[COL_ID] == str(demanda_id)]
+
     if empresa_term:
         term = empresa_term.lower()
         out = out[out[COL_EMPRESA].str.lower().str.contains(term, na=False)]
+
+    # Produto (opcional, via texto)
     if produto:
-        out = out[match_produto_series(out["_PRODUTO_N"], produto)]
+        # regra simples (mantém comportamento anterior)
+        if produto != "AMBOS":
+            out = out[out[COL_PRODUTO].str.lower().str.contains(produto.lower(), na=False)]
+        else:
+            # "AMBOS" = contém saúde e odonto
+            s = out[COL_PRODUTO].str.lower()
+            out = out[s.str.contains("sa", na=False) & s.str.contains("od", na=False)]
+
     if date_since is not None:
         out = out[out[COL_DATE] >= date_since]
 
@@ -367,10 +408,10 @@ def filter_df(df_in: pd.DataFrame, demanda_id=None, empresa_term=None, produto=N
 def to_csv_bytes(df_export: pd.DataFrame) -> bytes:
     return df_export.to_csv(index=False).encode("utf-8")
 
-def download_icon_link(data_bytes: bytes, filename: str, tooltip: str):
+def download_icon_link(data_bytes: bytes, filename: str, icon: str, tooltip: str):
     b64 = base64.b64encode(data_bytes).decode("utf-8")
     href = f"data:text/csv;base64,{b64}"
-    return f'<a class="joy-icon" href="{href}" download="{filename}" title="{tooltip}">⬇️</a>'
+    return f'<a class="joy-icon" href="{href}" download="{filename}" title="{tooltip}">{icon}</a>'
 
 # =========================================================
 # HERO (topo)
@@ -380,7 +421,8 @@ st.markdown('<div class="joy-card">', unsafe_allow_html=True)
 c1, c2 = st.columns([1, 3], vertical_alignment="center")
 
 with c1:
-    loop_video_html(VIDEO_HERO, width_px=165)
+    if VIDEO_IDLE.exists():
+        loop_video_html(VIDEO_IDLE, width_px=170)
 
 with c2:
     st.markdown(f'<div class="joy-title">💬 {ASSISTANT_NAME} – Estagiária Placement</div>', unsafe_allow_html=True)
@@ -390,7 +432,8 @@ with c2:
     )
     st.markdown(
         '<div class="joy-lead"><b>Deixa comigo 😄</b><br>'
-        'Eu te ajudo a acompanhar as atualizações dos estudos — rápido, claro e sem dor de cabeça.</div>',
+        'Me manda um <b>ID</b> ou o nome da <b>empresa</b> e eu te trago a atualização mais recente. '
+        'Se quiser, você também pode escrever <b>histórico</b> ou <b>desde dd/mm/aaaa</b> na busca.</div>',
         unsafe_allow_html=True,
     )
 
@@ -402,26 +445,28 @@ with c2:
                 "Pesquisar",
                 value=st.session_state.pending_query,
                 label_visibility="collapsed",
-                placeholder="Ex.: 6163 | Leadec | 6163 histórico | Leadec saúde | Leadec ambos | Leadec desde 10/01/2026",
+                placeholder="Ex.: 6163 | Leadec | 6163 histórico | Leadec desde 10/01/2026",
             )
         with s2:
             submitted = st.form_submit_button("Buscar", use_container_width=True)
 
-        st.caption("💡 Dica: você pode digitar saúde/odonto/ambos, histórico e desde dd/mm/aaaa na própria busca.")
+        st.caption("💡 Dica: exemplos: 6163 | Leadec | 6163 histórico | Leadec desde 10/01/2026")
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================================================
-# RESULT RENDER (só 1 vídeo no resultado)
+# RESULT RENDER (1 vídeo aleatório / sem vídeo no "buscando")
 # =========================================================
-def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, filename: str, success_video: Path):
+def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, filename: str):
     st.markdown('<div class="joy-result-card">', unsafe_allow_html=True)
 
-    col_left, col_mid, col_right = st.columns([1.0, 4.4, 1.2], vertical_alignment="top")
+    col_left, col_mid, col_right = st.columns([1.1, 4.2, 1.2], vertical_alignment="top")
 
     with col_left:
-        loop_video_html(success_video, width_px=150)
+        # 1 vídeo aleatório (resultado)
+        if RESULT_VIDEOS:
+            loop_video_html(random.choice(RESULT_VIDEOS), width_px=170)
 
     with col_mid:
         st.markdown(f'<div class="joy-result-title">📁 {title}</div>', unsafe_allow_html=True)
@@ -431,12 +476,12 @@ def render_result_header(title: str, consulta_label: str, csv_bytes: bytes, file
         )
 
     with col_right:
-        download_link = download_icon_link(csv_bytes, filename, "Exportar CSV")
+        download_link = download_icon_link(csv_bytes, filename, "⬇️", "Exportar CSV")
         st.markdown(f'<div class="joy-toolbar">{download_link}</div>', unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-def show_history(result: pd.DataFrame, consulta_label: str, success_video: Path):
+def show_history(result: pd.DataFrame, consulta_label: str):
     table = result[[COL_DATE, COL_STATUS, COL_PRODUTO, COL_AUTOR, COL_TEXTO]].copy()
     table.rename(
         columns={
@@ -449,14 +494,13 @@ def show_history(result: pd.DataFrame, consulta_label: str, success_video: Path)
         inplace=True,
     )
     table["Data"] = pd.to_datetime(table["Data"], errors="coerce").dt.strftime("%d/%m/%Y").fillna("—")
+
     csv_bytes = to_csv_bytes(table)
-
-    safe_label = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(consulta_label))[:60] or "consulta"
-    render_result_header("Histórico", consulta_label, csv_bytes, f"historico_{safe_label}.csv", success_video)
-
+    render_result_header("Histórico", consulta_label, csv_bytes, f"historico_{consulta_label}.csv")
+    st.success(pick_result_msg())
     st.dataframe(table, use_container_width=True, hide_index=True)
 
-def show_last_update(result: pd.DataFrame, consulta_label: str, success_video: Path):
+def show_last_update(result: pd.DataFrame, consulta_label: str):
     r = result.iloc[0]
     d = r[COL_DATE].strftime("%d/%m/%Y") if pd.notna(r[COL_DATE]) else "—"
 
@@ -472,8 +516,9 @@ def show_last_update(result: pd.DataFrame, consulta_label: str, success_video: P
     }])
 
     csv_bytes = to_csv_bytes(export_df)
-    safe_label = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(consulta_label))[:60] or "consulta"
-    render_result_header("Última atualização", consulta_label, csv_bytes, f"ultima_atualizacao_{safe_label}.csv", success_video)
+    render_result_header("Última atualização", consulta_label, csv_bytes, f"ultima_atualizacao_{consulta_label}.csv")
+
+    st.success(pick_result_msg())
 
     st.markdown(
         f"""
@@ -489,48 +534,36 @@ def show_last_update(result: pd.DataFrame, consulta_label: str, success_video: P
 """
     )
 
-LOADING_PHRASES = [
-    "Opa! Só um segundinho… deixa eu puxar isso aqui pra você 🔎",
-    "Já vi 😄 um instante que eu consulto aqui rapidinho.",
-    "Fechou. Tô buscando as atualizações agora ✨",
-    "Entendi! Só um segundo que eu volto com o resultado 👀",
-    "Tá na mão — consultando aqui ⚡",
-    "Ok! Já já te trago isso certinho ✅",
-    "Beleza. Deixa comigo 🧠",
-    "Só um instantinho… tô checando 🗂️",
-    "Certo! Consultando agora 🔍",
-    "Perfeito. Já vou puxar pra você 📌",
-]
-
-def run_query(q: str, run_seed: int):
+def run_query(q: str):
     q = (q or "").strip()
     if not q:
         st.warning("Digite um ID ou uma empresa para pesquisar.")
         return
 
-    st.info(random.Random(run_seed).choice(LOADING_PHRASES))
+    # mensagem humana (sem vídeo de loading)
+    st.info(pick_busca_msg())
 
     demanda_id, empresa_term, produto, historico, date_since = parse_user_message(q)
+
     result = filter_df(df, demanda_id, empresa_term, produto, date_since)
 
     if result.empty:
-        st.error("Opa, desculpa! Não encontrei nada com esses critérios. Tenta só ID (6163) ou só empresa (Leadec).")
+        st.error("Opa, desculpa! Não encontrei nada com esses critérios. Tenta só ID (ex.: 6163) ou só empresa (ex.: Leadec).")
         return
 
     consulta_label = demanda_id or (empresa_term if empresa_term else "consulta")
-    success_video = pick_success_video(run_seed)
 
     if historico:
-        show_history(result, consulta_label, success_video)
+        show_history(result, consulta_label)
     else:
-        show_last_update(result, consulta_label, success_video)
+        show_last_update(result, consulta_label)
 
 # =========================================================
-# RUN (recarrega resultado a cada busca)
+# RUN (limpa/recarrega resultado a cada busca)
 # =========================================================
 if "submitted" in locals() and submitted:
     st.session_state.last_run_id += 1
 
 with st.container(key=f"result_container_{st.session_state.last_run_id}"):
     if "submitted" in locals() and submitted:
-        run_query(st.session_state.pending_query, st.session_state.last_run_id)
+        run_query(st.session_state.pending_query)
